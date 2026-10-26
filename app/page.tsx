@@ -6,6 +6,7 @@ import {
   Lightbulb, LoaderCircle, Plus, Rocket, Sparkles, Trash2, WandSparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AuthPanel } from "@/app/components/auth-panel";
 import {
   launchChecklistLabels, phases, projectTypes,
   type GeneratedPlan, type PhaseName, type Project, type ProjectType,
@@ -207,10 +208,11 @@ export default function HomePage() {
           <div className="breadcrumb">{view === "project" && activeProject ? `Projects / ${activeProject.plan.title}` : "Your project workspace"}</div>
           <div className="topbar-right">
             <span className="demo-pill"><Circle size={6} fill="currentColor" /> Private workspace</span>
+            <AuthPanel />
           </div>
         </header>
 
-        <div className="content">
+        <div key={view === "project" ? activeProject?.id ?? "project" : "home"} className="content">
           {view === "project" && activeProject ? (
             <ProjectWorkspace
               project={activeProject}

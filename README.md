@@ -29,14 +29,14 @@ Open [http://localhost:3000](http://localhost:3000). To use Google Gemini, set `
 | `GOOGLE_MODEL` | No | Gemini model; defaults to `gemini-2.5-flash`. |
 | `OPENAI_API_KEY` | No | Server-side OpenAI API key. Never expose it as a `NEXT_PUBLIC_` variable. |
 | `OPENAI_MODEL` | No | OpenAI chat-completions model; defaults to `gpt-4o-mini`. |
-| `NEXT_PUBLIC_SUPABASE_URL` | No | Supabase Project URL. Supabase is not connected to app storage yet. |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | No | Supabase publishable key. Safe for browser use only with Row Level Security enabled. Never use a service-role/secret key here. |
+| `NEXT_PUBLIC_SUPABASE_URL` | No | Supabase Project URL used for email sign-in and sign-up. |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | No | Supabase publishable key used for email sign-in and sign-up. Safe for browser use only with RLS enabled. Never use a service-role/secret key here. |
 
 The generation endpoint validates both the request and structured model response. AI failures are shown with a retry action; an AI error never silently falls back to demo content.
 
 ## Supabase database (optional setup)
 
-A paste-ready database schema and setup guide are available in [`supabase/`](./supabase/). Running that SQL creates a private, RLS-protected projects table, but the current app still uses browser localStorage; Supabase Auth and app integration are not implemented yet.
+A paste-ready database schema and setup guide are available in [`supabase/`](./supabase/). Email sign-in and sign-up use Supabase Auth when the variables above are configured. Projects still use browser localStorage; cloud project storage is not implemented yet.
 
 ## Scripts
 
@@ -56,5 +56,5 @@ Deploy to any host that supports the current Next.js release. Configure the sele
 ## MVP limitations
 
 - Projects are stored locally in the browser; clearing site data removes them.
-- No accounts, cross-device sync, collaboration, or server-side project storage.
+- Supabase email accounts are supported when configured; projects do not yet sync across devices or use server-side project storage.
 - Demo mode generates a deterministic example plan and does not call an AI service.

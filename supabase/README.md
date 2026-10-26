@@ -5,8 +5,9 @@
 1. Create a project at [supabase.com](https://supabase.com).
 2. Open **SQL Editor** in the Supabase dashboard.
 3. Open [`schema.sql`](./schema.sql), copy its full contents, paste them into a new SQL query, and run it.
-4. In **Authentication → Providers**, enable an authentication provider such as Email.
-5. In **Table Editor**, confirm `public.projects` exists and Row Level Security is enabled.
+4. In **Authentication → Providers**, enable Email/password sign-in.
+5. In **Authentication → URL Configuration**, set the Site URL to `http://localhost:3000` for local development. Add your deployed Vercel URL to the allowed redirect URLs when you deploy.
+6. In **Table Editor**, confirm `public.projects` exists and Row Level Security is enabled.
 
 ## Option B: use the Supabase CLI
 
@@ -32,10 +33,15 @@ The schema stores each project's plan, task state, launch checklist, and timesta
 
 ## Credentials
 
-For the future app integration, retrieve the Project URL and publishable key from **Project Settings → API**. The current app does not use Supabase yet, so adding these values to Vercel or `.env.local` alone will not enable cloud saves.
+Retrieve the Project URL and publishable key from **Project Settings → API** and set them in `.env.local`:
 
-When Supabase client integration is implemented, use server/client environment variables appropriate to that integration (commonly `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` or the current publishable key). A publishable/anon key is safe to expose only with RLS correctly enabled. Never place the `service_role` key in browser code or a `NEXT_PUBLIC_` variable.
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
+```
+
+Restart `npm run dev` after changing environment variables. For Vercel, add the same two values in the project's Environment Variables settings and redeploy. The publishable key is intended for browser use; never put the `service_role` key in browser code or a `NEXT_PUBLIC_` variable.
 
 ## Current limitation
 
-This file creates the database table and its access controls only. PromptPilot still saves projects in browser localStorage until Supabase Auth and database operations are added to the application.
+PromptPilot's sign-in/sign-up panel uses Supabase Auth, but projects still save in browser localStorage until database operations are implemented. Creating accounts does not currently enable project sync.
