@@ -10,7 +10,7 @@ import {
   launchChecklistLabels, phases, projectTypes,
   type GeneratedPlan, type PhaseName, type Project, type ProjectType,
 } from "@/lib/plan-schema";
-import { calculateProgress, createProject, parseProjects, PROJECTS_STORAGE_KEY } from "@/lib/projects";
+import { calculateProgress, createProject, mergeRefinedPlan, parseProjects, PROJECTS_STORAGE_KEY } from "@/lib/projects";
 
 const examples = [
   "A neighborhood marketplace for borrowing tools and household gear",
@@ -28,6 +28,9 @@ export default function HomePage() {
   const [idea, setIdea] = useState("");
   const [projectType, setProjectType] = useState<ProjectType>("Web app");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [refinementInstruction, setRefinementInstruction] = useState("");
+  const [isRefining, setIsRefining] = useState(false);
+  const [refinementError, setRefinementError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [generationMode, setGenerationMode] = useState<"ai" | "demo" | null>(null);
   const [copied, setCopied] = useState(false);
@@ -77,6 +80,40 @@ export default function HomePage() {
       setIsGenerating(false);
     }
   }, [idea, projectType]);
+
+  async function refineActiveProject() {
+    if (!activeProject) return;
+    const instruction = refinementInstruction.trim();
+    if (instruction.length < 8) {
+      setRefinementError("Add a little more detail about what you'd like to change.");
+      return;
+    }
+
+    setIsRefining(true);
+    setRefinementError(null);
+    try {
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "refine", plan: activeProject.plan, instruction }),
+      });
+      const result = await response.json() as { plan?: GeneratedPlan; mode?: "ai" | "demo"; error?: string };
+      if (!response.ok) {
+        throw new Error(result.error || "We couldn't refine your plan. Please try again.");
+      }
+      if (!result.plan) throw new Error("The AI planner returned an incomplete plan. Please retry.");
+      const refinedPlan = result.plan;
+      setProjects((current) => current.map((project) => project.id === activeProject.id
+        ? mergeRefinedPlan(project, refinedPlan)
+        : project));
+      setRefinementInstruction("");
+      setGenerationMode(result.mode ?? "ai");
+    } catch (caught) {
+      setRefinementError(caught instanceof Error ? caught.message : "We couldn't refine your plan. Please try again.");
+    } finally {
+      setIsRefining(false);
+    }
+  }
 
   function toggleTask(phase: PhaseName, taskId: string) {
     if (!activeProject) return;
@@ -180,9 +217,14 @@ export default function HomePage() {
               progress={progress!}
               mode={generationMode}
               copied={copied}
+              refinementInstruction={refinementInstruction}
+              isRefining={isRefining}
+              refinementError={refinementError}
               onToggleTask={toggleTask}
               onToggleChecklist={toggleChecklist}
               onCopyPrompt={copyPrompt}
+              onRefinementInstructionChange={(value) => { setRefinementInstruction(value); setRefinementError(null); }}
+              onRefine={refineActiveProject}
               onBack={() => { setView("home"); setActiveProjectId(null); }}
             />
           ) : (
@@ -310,13 +352,21 @@ interface WorkspaceProps {
   progress: { completed: number; total: number; percentage: number };
   mode: "ai" | "demo" | null;
   copied: boolean;
+  refinementInstruction: string;
+  isRefining: boolean;
+  refinementError: string | null;
   onToggleTask: (phase: PhaseName, taskId: string) => void;
   onToggleChecklist: (index: number) => void;
   onCopyPrompt: (prompt: string) => void;
+  onRefinementInstructionChange: (value: string) => void;
+  onRefine: () => void;
   onBack: () => void;
 }
 
-function ProjectWorkspace({ project, progress, mode, copied, onToggleTask, onToggleChecklist, onCopyPrompt, onBack }: WorkspaceProps) {
+function ProjectWorkspace({
+  project, progress, mode, copied, refinementInstruction, isRefining, refinementError,
+  onToggleTask, onToggleChecklist, onCopyPrompt, onRefinementInstructionChange, onRefine, onBack,
+}: WorkspaceProps) {
   return (
     <>
       <button className="secondary-button" style={{ marginBottom: 22 }} onClick={onBack}><ArrowLeft size={13} /> All projects</button>
@@ -326,6 +376,30 @@ function ProjectWorkspace({ project, progress, mode, copied, onToggleTask, onTog
           <p className="workspace-summary">{project.plan.summary}</p>
         </div>
       </div>
+      <section className="panel" style={{ marginTop: 21 }}>
+        <div className="panel-heading" style={{ marginBottom: 9 }}>
+          <h2 className="panel-title"><WandSparkles size={15} /> Refine this plan</h2>
+          <span className="panel-kicker">MAKE IT YOURS</span>
+        </div>
+        <p className="panel-kicker" style={{ margin: "0 0 12px", lineHeight: 1.6 }}>
+          Ask for a change in plain language. Your current plan stays saved if refinement fails.
+        </p>
+        <textarea
+          className="idea-input"
+          aria-label="Describe how to refine this project plan"
+          placeholder="e.g. Simplify the MVP and prioritize a mobile-first launch..."
+          value={refinementInstruction}
+          maxLength={1000}
+          onChange={(event) => onRefinementInstructionChange(event.target.value)}
+          style={{ minHeight: 72, border: "1px solid #292c36", borderRadius: 8, background: "#0e1015", padding: 11 }}
+        />
+        {refinementError && <div className="error-banner" role="alert"><AlertCircle size={15} />{refinementError}</div>}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+          <button className="primary-button" onClick={onRefine} disabled={isRefining || refinementInstruction.trim().length < 8}>
+            {isRefining ? <><LoaderCircle size={14} className="animate-spin" /> Refining plan...</> : <><WandSparkles size={14} /> Refine plan</>}
+          </button>
+        </div>
+      </section>
       <div className="progress-card">
         <div className="progress-meta"><span className="progress-number">{progress.percentage}% complete</span><span className="progress-caption">{progress.completed} of {progress.total} roadmap tasks</span></div>
         <div className="progress-track" role="progressbar" aria-label="Roadmap progress" aria-valuenow={progress.percentage} aria-valuemin={0} aria-valuemax={100}>

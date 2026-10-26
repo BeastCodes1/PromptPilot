@@ -39,6 +39,12 @@ export const generationRequestSchema = z.object({
   projectType: z.enum(projectTypes).default("Web app"),
 });
 
+export const planRefinementRequestSchema = z.object({
+  mode: z.literal("refine"),
+  plan: generatedPlanSchema,
+  instruction: z.string().trim().min(8, "Tell us what you'd like to change.").max(1000),
+});
+
 export type ProjectType = (typeof projectTypes)[number];
 export type TaskPriority = z.infer<typeof taskSchema>["priority"];
 export type PhaseName = (typeof phases)[number];

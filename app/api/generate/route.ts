@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { createDemoPlan } from "@/lib/demo-plan";
-import { generatedPlanSchema, generationRequestSchema } from "@/lib/plan-schema";
+import { generatedPlanSchema, generationRequestSchema, planRefinementRequestSchema, type GeneratedPlan } from "@/lib/plan-schema";
 
 export const runtime = "nodejs";
-const maxRequestBytes = 10_000;
+const maxRequestBytes = 40_000;
 
-const systemPrompt = `You are PromptPilot, a pragmatic senior product engineer. Turn a rough software idea into a concrete, buildable MVP plan. Return only valid JSON with these exact fields: title, summary, projectType, targetAudience, problem, uniqueSellingPoint, mvpScope (3-7 strings), tasks (arrays named Setup, Core Features, Polish, Launch), codingPrompt. Each phase must contain respectively 2-5, 3-7, 2-5, and 2-5 tasks. Each task has title, description, priority (High, Medium, Low). Keep scope realistic, descriptions specific, and the codingPrompt detailed with recommended stack, requirements, UI direction, and implementation order. Use the requested project type unless it is Other.`;
+const systemPrompt = `You are PromptPilot, a pragmatic senior product engineer. Return only valid JSON with these exact fields: title, summary, projectType, targetAudience, problem, uniqueSellingPoint, mvpScope (3-7 strings), tasks (arrays named Setup, Core Features, Polish, Launch), codingPrompt. Each phase must contain respectively 2-5, 3-7, 2-5, and 2-5 tasks. Each task has title, description, priority (High, Medium, Low). Keep the plan specific, realistic, and coherent. The codingPrompt must include the recommended stack, key requirements, UI direction, and implementation order.`;
 
 type Provider = "google" | "openai";
 
@@ -48,12 +48,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "We couldn't read that request. Please try again." }, { status: 400 });
   }
 
-  const requestResult = generationRequestSchema.safeParse(body);
-  if (!requestResult.success) {
-    return NextResponse.json({ error: requestResult.error.issues[0]?.message ?? "Please check your project idea." }, { status: 400 });
+  const refinementResult = planRefinementRequestSchema.safeParse(body);
+  let isRefinement = false;
+  let requestContent: string;
+  let demoPlan: GeneratedPlan | null = null;
+  if (refinementResult.success) {
+    isRefinement = true;
+    requestContent = `Refine the following existing project plan according to the user's instruction. Preserve its identity and all aspects not affected by the instruction. Return a complete replacement plan in the required JSON shape.\n\nCURRENT PLAN:\n${JSON.stringify(refinementResult.data.plan)}\n\nREFINEMENT INSTRUCTION:\n${refinementResult.data.instruction}`;
+  } else {
+    const generationResult = generationRequestSchema.safeParse(body);
+    if (!generationResult.success) {
+      return NextResponse.json({ error: generationResult.error.issues[0]?.message ?? "Please check your project idea." }, { status: 400 });
+    }
+    requestContent = `Requested project type: ${generationResult.data.projectType}\n\nIdea:\n${generationResult.data.idea}`;
+    demoPlan = createDemoPlan(generationResult.data.idea, generationResult.data.projectType);
   }
 
-  const { idea, projectType } = requestResult.data;
   const configuredProvider = process.env.AI_PROVIDER?.trim().toLowerCase();
   if (configuredProvider && configuredProvider !== "google" && configuredProvider !== "openai") {
     return NextResponse.json({ error: "AI_PROVIDER must be set to either google or openai." }, { status: 500 });
@@ -67,8 +77,13 @@ export async function POST(request: Request) {
         ? "openai"
         : null;
   if (!provider) {
-    const plan = createDemoPlan(idea, projectType);
-    return NextResponse.json({ plan, mode: "demo" });
+    if (isRefinement) {
+      return NextResponse.json({ error: "Plan refinement needs an AI provider. Add a server API key; your saved plan has not changed." }, { status: 503 });
+    }
+    if (!demoPlan) {
+      return NextResponse.json({ error: "The demo plan could not be prepared." }, { status: 500 });
+    }
+    return NextResponse.json({ plan: demoPlan, mode: "demo" });
   }
 
   const apiKey = provider === "google" ? process.env.GOOGLE_API_KEY : process.env.OPENAI_API_KEY;
@@ -87,7 +102,7 @@ export async function POST(request: Request) {
             headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
             body: JSON.stringify({
               systemInstruction: { parts: [{ text: systemPrompt }] },
-              contents: [{ role: "user", parts: [{ text: `Requested project type: ${projectType}\n\nIdea:\n${idea}` }] }],
+              contents: [{ role: "user", parts: [{ text: requestContent }] }],
               generationConfig: { responseMimeType: "application/json", temperature: 0.6 },
             }),
             signal: AbortSignal.timeout(45_000),
@@ -102,7 +117,7 @@ export async function POST(request: Request) {
             temperature: 0.6,
             messages: [
               { role: "system", content: systemPrompt },
-              { role: "user", content: `Requested project type: ${projectType}\n\nIdea:\n${idea}` },
+              { role: "user", content: requestContent },
             ],
           }),
           signal: AbortSignal.timeout(45_000),

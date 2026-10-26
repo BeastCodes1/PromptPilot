@@ -40,6 +40,32 @@ export function createProject(plan: GeneratedPlan, now = new Date()): Project {
   };
 }
 
+export function mergeRefinedPlan(project: Project, plan: GeneratedPlan, now = new Date()): Project {
+  const previousTasks = project.tasks;
+  const nextTasks = Object.fromEntries(
+    phases.map((phase) => [
+      phase,
+      plan.tasks[phase].map((task, index): ProjectTask => {
+        const previous = previousTasks[phase].find(
+          (candidate) => candidate.title.trim().toLowerCase() === task.title.trim().toLowerCase(),
+        );
+        return {
+          ...task,
+          id: previous?.id ?? `${phase.toLowerCase().replaceAll(" ", "-")}-${now.getTime()}-${index}`,
+          completed: previous?.completed ?? false,
+        };
+      }),
+    ]),
+  ) as Record<PhaseName, ProjectTask[]>;
+
+  return {
+    ...project,
+    updatedAt: now.toISOString(),
+    plan,
+    tasks: nextTasks,
+  };
+}
+
 export function calculateProgress(project: Pick<Project, "tasks">): { completed: number; total: number; percentage: number } {
   const allTasks = phases.flatMap((phase) => project.tasks[phase]);
   const completed = allTasks.filter((task) => task.completed).length;

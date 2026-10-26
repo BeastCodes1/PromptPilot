@@ -29,8 +29,14 @@ Open [http://localhost:3000](http://localhost:3000). To use Google Gemini, set `
 | `GOOGLE_MODEL` | No | Gemini model; defaults to `gemini-2.5-flash`. |
 | `OPENAI_API_KEY` | No | Server-side OpenAI API key. Never expose it as a `NEXT_PUBLIC_` variable. |
 | `OPENAI_MODEL` | No | OpenAI chat-completions model; defaults to `gpt-4o-mini`. |
+| `NEXT_PUBLIC_SUPABASE_URL` | No | Supabase Project URL. Supabase is not connected to app storage yet. |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | No | Supabase publishable key. Safe for browser use only with Row Level Security enabled. Never use a service-role/secret key here. |
 
 The generation endpoint validates both the request and structured model response. AI failures are shown with a retry action; an AI error never silently falls back to demo content.
+
+## Supabase database (optional setup)
+
+A paste-ready database schema and setup guide are available in [`supabase/`](./supabase/). Running that SQL creates a private, RLS-protected projects table, but the current app still uses browser localStorage; Supabase Auth and app integration are not implemented yet.
 
 ## Scripts
 
